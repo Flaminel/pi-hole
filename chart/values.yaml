@@ -1,0 +1,100 @@
+forceRedeploy: true
+
+deployment:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    maxSurge: 1
+    maxUnavailable: 0
+  containers:
+    -
+      name: pi-hole
+      image:
+        repository: pihole/pihole
+        tag: latest
+      ports:
+        -
+          name: http
+          containerPort: 80
+        -
+          name: dns-tcp
+          containerPort: 53
+          protocol: TCP
+        -
+          name: dns-udp
+          containerPort: 53
+          protocol: UDP
+      resources:
+        requests:
+          cpu: 500m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 128Mi
+      volumeMounts:
+        - name: storage
+          mountPath: /etc/pihole
+          subPath: etc/pihole
+        - name: storage
+          mountPath: /etc/dnsmasq.d
+          subPath: etc/dnsmasq.d
+      env:
+        - 
+          name: TZ
+          value: Europe/Bucharest
+      envFromSecret:
+        -
+          secretName: auth-secret
+          envs:
+            - 
+              name: WEBPASSWORD
+              key: webPassword
+            -
+              name: FTLCONF_LOCAL_IPV4	
+              key: hostIP
+  volumes:
+    -
+      name: storage
+      type: pvc
+      typeName: storage-pvc
+
+pvcs:
+  -
+    name: storage-pvc
+    storageClassName: local-path
+    accessModes:
+      - ReadWriteMany
+    size: 1Gi
+    volumeMode: Filesystem
+
+secrets:
+  -
+    name: auth-secret
+    type: Opaque
+    data:
+      webPassword: $PiHoleWebPassword
+      hostIP: $PiHoleHostIP
+
+services:
+  -
+    name: service
+    type: ClusterIP
+    ports:
+      -
+        name: http
+        protocol: TCP
+        port: 80
+  -
+    name: service-dns
+    type: LoadBalancer
+    ports:
+      -
+        name: dns-tcp
+        protocol: TCP
+        port: 53
+        targetPort: dns-tcp
+      -
+        name: dns-udp
+        protocol: UDP
+        port: 53
+        targetPort: dns-udp
